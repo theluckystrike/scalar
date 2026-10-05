@@ -7,6 +7,7 @@ import type { XScalarCookie } from '@scalar/workspace-store/schemas/extensions/g
 import type { ServerObject } from '@scalar/workspace-store/schemas/v3.2/strict/openapi-document'
 import type { OperationObject } from '@scalar/workspace-store/schemas/v3.2/strict/operation'
 
+import type { ReservedPathParameter } from '@/helpers/encode-path-parameter'
 import { type QuerystringParameter, getQuerystringParameter } from '@/helpers/querystring-parameter'
 import { getServerVariables } from '@/request-example/builder/helpers/get-server-variables'
 import {
@@ -108,6 +109,8 @@ export type RequestFactory = {
     variables: Record<string, string>
     /** Names whose example is already URI-encoded. */
     serializedParameters?: Set<string>
+    /** Schema-based values using OpenAPI 3.2 reserved expansion. */
+    reservedParameters?: Record<string, ReservedPathParameter>
     /**
      * The raw request path string, as entered by the user or read from the OpenAPI schema.
      * Placeholders are not yet substituted.
@@ -238,7 +241,7 @@ export const requestFactory = ({
   /** The selected security schemes for the current operation */
   selectedSecuritySchemes: SecuritySchemeObjectSecret[]
   /** Selected anyOf/oneOf request-body variants keyed by schema path */
-  /** Originating OpenAPI version, used for XML mapping rules. */
+  /** Originating OpenAPI version, used for version-specific serialization. */
   openapiVersion?: string
   requestBodyCompositionSelection?: Record<string, number>
 }): {
@@ -247,7 +250,7 @@ export const requestFactory = ({
   const requestBody = getResolvedRef(operation.requestBody)
 
   /** Build out the request parameters */
-  const params = buildRequestParameters(operation.parameters ?? [], exampleName)
+  const params = buildRequestParameters(operation.parameters ?? [], exampleName, openapiVersion)
   const querystringParameter = operation.parameters
     ?.map((parameter) => getResolvedRef(parameter))
     .find((parameter) => parameter?.in === 'querystring')
@@ -298,6 +301,7 @@ export const requestFactory = ({
     path: {
       variables: params.pathVariables,
       ...(params.serializedPathParameters ? { serializedParameters: params.serializedPathParameters } : {}),
+      ...(params.reservedPathParameters ? { reservedParameters: params.reservedPathParameters } : {}),
       raw: path,
     },
     query: params.urlParams,

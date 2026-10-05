@@ -1,4 +1,5 @@
 import { isObjectLike } from '@scalar/helpers/object/is-object'
+import { serializeReservedPathParameter } from '@scalar/workspace-store/helpers/encode-path-parameter'
 import { getParameterExample } from '@scalar/workspace-store/helpers/get-parameter-example'
 import { getResolvedRef } from '@scalar/workspace-store/helpers/get-resolved-ref'
 import {
@@ -130,6 +131,7 @@ export const processParameters = ({
   parameters,
   example,
   defaultDisabled,
+  openapiVersion,
 }: {
   harRequest: HarRequest
   parameters: OperationObject['parameters']
@@ -137,6 +139,8 @@ export const processParameters = ({
   example?: string | undefined
   /** Whether to disable parameters by default. */
   defaultDisabled: boolean
+  /** Originating API description version. */
+  openapiVersion?: string
 }): ProcessedParameters => {
   // Create copies of the arrays to avoid modifying the input
   const newHeaders = [...harRequest.headers]
@@ -213,7 +217,14 @@ export const processParameters = ({
 
     switch (param.in) {
       case 'path': {
-        newUrl = processPathParameters(newUrl, param, paramValue, style, explode)
+        const allowReserved = openapiVersion?.startsWith('3.2.') && 'schema' in param && param.allowReserved === true
+        const pathValue = allowReserved
+          ? serializeReservedPathParameter(param.name, { value: paramValue, style, explode })
+          : undefined
+        newUrl =
+          pathValue === undefined
+            ? processPathParameters(newUrl, param, paramValue, style, explode)
+            : newUrl.replaceAll(`{${param.name}}`, () => pathValue)
         break
       }
 
